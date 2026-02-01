@@ -11,14 +11,14 @@ import PromiseKit
 import StoreFoundation
 
 extension SSPurchase {
-    func perform(appID: AppID, purchasing: Bool) -> Promise<Void> {
+    func perform(appID: AppID, purchasing: Bool, appExtVrsId: Int = 0) -> Promise<Void> {
         var parameters =
             [
                 "productType": "C",
                 "price": 0,
                 "salableAdamId": appID,
                 "pg": "default",
-                "appExtVrsId": 0,
+                "appExtVrsId": appExtVrsId,
             ] as [String: Any]
 
         if purchasing {

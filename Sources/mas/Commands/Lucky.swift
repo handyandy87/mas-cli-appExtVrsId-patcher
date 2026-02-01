@@ -24,6 +24,9 @@ extension MAS {
 
         @Flag(help: "Force reinstall")
         var force = false
+
+        @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
+        var appExtVrsId: Int = 0
         @Argument(help: "Search term")
         var searchTerm: String
 
@@ -65,7 +68,7 @@ extension MAS {
                 printWarning("\(displayName) is already installed")
             } else {
                 do {
-                    try downloadApps(withAppIDs: [appID]).wait()
+                    try downloadApps(withAppIDs: [appID], appExtVrsId: appExtVrsId).wait()
                 } catch {
                     throw error as? MASError ?? .downloadFailed(error: error as NSError)
                 }

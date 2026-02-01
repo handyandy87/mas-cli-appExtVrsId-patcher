@@ -18,6 +18,10 @@ extension MAS {
 
         @Flag(help: "Force reinstall")
         var force = false
+
+        @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
+        var appExtVrsId: Int = 0
+
         @Argument(help: ArgumentHelp("App ID", valueName: "app-id"))
         var appIDs: [AppID]
 
@@ -38,7 +42,7 @@ extension MAS {
             }
 
             do {
-                try downloadApps(withAppIDs: appIDs, verifiedBy: searcher).wait()
+                try downloadApps(withAppIDs: appIDs, verifiedBy: searcher, appExtVrsId: appExtVrsId).wait()
             } catch {
                 throw error as? MASError ?? .downloadFailed(error: error as NSError)
             }

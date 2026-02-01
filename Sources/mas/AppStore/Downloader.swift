@@ -23,7 +23,8 @@ import StoreFoundation
 func downloadApps(
     withAppIDs unverifiedAppIDs: [AppID],
     verifiedBy searcher: AppStoreSearcher,
-    purchasing: Bool = false
+    purchasing: Bool = false,
+    appExtVrsId: Int = 0
 ) -> Promise<Void> {
     when(resolved: unverifiedAppIDs.map { searcher.lookup(appID: $0) })
         .then { results in
@@ -38,7 +39,8 @@ func downloadApps(
                             return nil
                         }
                     },
-                purchasing: purchasing
+                purchasing: purchasing,
+                    appExtVrsId: appExtVrsId
             )
         }
 }
@@ -50,13 +52,13 @@ func downloadApps(
 ///   - purchasing: Flag indicating if the apps will be purchased. Only works for free apps. Defaults to false.
 /// - Returns: A promise that completes when the downloads are complete. If any fail,
 ///   the promise is rejected with the first error, after all remaining downloads are attempted.
-func downloadApps(withAppIDs appIDs: [AppID], purchasing: Bool = false) -> Promise<Void> {
+func downloadApps(withAppIDs appIDs: [AppID], purchasing: Bool = false, appExtVrsId: Int = 0) -> Promise<Void> {
     var firstError: Error?
     return
         appIDs
         .reduce(Guarantee.value(())) { previous, appID in
             previous.then {
-                downloadApp(withAppID: appID, purchasing: purchasing)
+                downloadApp(withAppID: appID, purchasing: purchasing, appExtVrsId: appExtVrsId)
                     .recover { error in
                         if firstError == nil {
                             firstError = error
@@ -74,10 +76,11 @@ func downloadApps(withAppIDs appIDs: [AppID], purchasing: Bool = false) -> Promi
 private func downloadApp(
     withAppID appID: AppID,
     purchasing: Bool = false,
+    appExtVrsId: Int = 0,
     withAttemptCount attemptCount: UInt32 = 3
 ) -> Promise<Void> {
     SSPurchase()
-        .perform(appID: appID, purchasing: purchasing)
+        .perform(appID: appID, purchasing: purchasing, appExtVrsId: appExtVrsId)
         .recover { error in
             guard attemptCount > 1 else {
                 throw error
@@ -94,6 +97,6 @@ private func downloadApp(
             let attemptCount = attemptCount - 1
             printWarning((downloadError ?? error).localizedDescription)
             printWarning("Trying again up to \(attemptCount) more \(attemptCount == 1 ? "time" : "times").")
-            return downloadApp(withAppID: appID, purchasing: purchasing, withAttemptCount: attemptCount)
+            return downloadApp(withAppID: appID, purchasing: purchasing, appExtVrsId: appExtVrsId, withAttemptCount: attemptCount)
         }
 }

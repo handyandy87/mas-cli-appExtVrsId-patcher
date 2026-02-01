@@ -55,4 +55,33 @@ struct MAS: ParsableCommand {
     func validate() throws {
         Self.initialize()
     }
+
+    /// Custom entry point so we can support a shorthand alias `-ver` (single-dash, multi-character)
+    /// by translating it to the standard long option `--ver` before ArgumentParser runs.
+    ///
+    /// This also allows the option to appear after positional arguments, e.g.:
+    ///   mas install 123456789 -ver 987654321
+    static func main() {
+        main(nil)
+    }
+
+    static func main(_ arguments: [String]?) {
+        do {
+            // ArgumentParser expects the argument array *without* the executable name.
+            var args = arguments ?? Array(CommandLine.arguments.dropFirst())
+
+            // Support `-ver` as an alias for `--ver`.
+            // (Swift ArgumentParser only supports single-character short options.)
+            for i in args.indices {
+                if args[i] == "-ver" {
+                    args[i] = "--ver"
+                }
+            }
+
+            var command = try parseAsRoot(args)
+            try command.run()
+        } catch {
+            exit(withError: error)
+        }
+    }
 }

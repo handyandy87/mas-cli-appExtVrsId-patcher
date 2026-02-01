@@ -15,6 +15,9 @@ extension MAS {
             abstract: "\"Purchase\" and install free apps from the Mac App Store"
         )
 
+        @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
+        var appExtVrsId: Int = 0
+
         @Argument(help: ArgumentHelp("App ID", valueName: "app-id"))
         var appIDs: [AppID]
 
@@ -35,7 +38,7 @@ extension MAS {
             }
 
             do {
-                try downloadApps(withAppIDs: appIDs, verifiedBy: searcher, purchasing: true).wait()
+                try downloadApps(withAppIDs: appIDs, verifiedBy: searcher, purchasing: true, appExtVrsId: appExtVrsId).wait()
             } catch {
                 throw error as? MASError ?? .downloadFailed(error: error as NSError)
             }

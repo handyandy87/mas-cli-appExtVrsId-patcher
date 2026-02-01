@@ -17,6 +17,9 @@ extension MAS {
             abstract: "Upgrade outdated app(s) installed from the Mac App Store"
         )
 
+        @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
+        var appExtVrsId: Int = 0
+
         @Argument(help: ArgumentHelp("App ID/app name", valueName: "app-id-or-name"))
         var appIDOrNames = [String]()
 
@@ -42,7 +45,7 @@ extension MAS {
                 )
 
                 do {
-                    try downloadApps(withAppIDs: apps.map(\.storeApp.trackId)).wait()
+                    try downloadApps(withAppIDs: apps.map(\.storeApp.trackId), appExtVrsId: appExtVrsId).wait()
                 } catch {
                     throw error as? MASError ?? .downloadFailed(error: error as NSError)
                 }
