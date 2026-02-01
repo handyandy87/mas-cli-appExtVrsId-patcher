@@ -30,9 +30,9 @@ Alternatively, to find an app's app item ID:
    (<https://apps.apple.com/us/app/xcode/id497799835?mt=12>) has app ID `497799835`
 
 
-**Note: The method below is currently the only way to obain older versions of Final Cut Pro, Compressor and Motion from the Mac App Store on OS versions older than 15.6.**
+> Note: The method below is currently the only way to obain older versions of Final Cut Pro, Compressor and Motion from the Mac App Store on OS versions older than 15.6.
 
-For specific versions of Apple Pro Apps and certain Apple productivity apps, I've been working to collect both the App Item IDs and App External IDs:
+**For specific versions of Apple Pro Apps and certain Apple productivity apps, I've been working to collect both the App Item IDs and App External IDs:**
 1. Checkout https://github.com/handyandy87/Pro-Apps-App-External-IDs
 2. Navigate to the CSV file for the app you're looking to find a specific version
 4. Make note of the value in the App External ID column on the desired version -- you'll use that value along with the "--ver" argument
