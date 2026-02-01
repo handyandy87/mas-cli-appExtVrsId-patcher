@@ -65,8 +65,10 @@ $ mas install 497799835
 ==> Installed Xcode
 ```
 
+> Note: At time of writing, the method below is required to obain older versions of Final Cut Pro, Compressor and Motion from the Mac App Store on OS versions older than 15.6. If you are running an OS version older than 15.6 and do not provide an App External ID, the Mac App Store will report that your machine does not meet the minimum OS requirements.
 
 **To install a specific version of an app allowed by the Mac App Store for your OS, you need to provide both the App Item ID and App External ID:**
+
 ```console
 $ mas install appItemID --ver appExternalID
 ```
