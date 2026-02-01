@@ -6,7 +6,7 @@ A command-line interface for the Mac App Store. Designed for scripting & automat
 ## This fork contains a patched version to accept a "--ver" argument for the appExtVrsId (aka App External ID)
 
 
-⚠️ MAS Version 1.9.0 is used in this fork. I've tested it was working with versions from Mojave thru Ventura ⚠️
+⚠️ MAS Version 1.9.0 is used in this branch. I've tested it was working with versions from Mojave thru Ventura ⚠️
 
 
 ### 🖥 Usage
