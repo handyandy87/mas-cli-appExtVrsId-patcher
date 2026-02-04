@@ -3,7 +3,7 @@
 A command-line interface for the Mac App Store. Designed for scripting & automation.
 
 
-## This fork contains a patched version to accept a "--ver" argument for the appExtVrsId (aka App External ID)
+## This contains a patched version of MAS to accept a "--ver" argument for the appExtVrsId (aka App External ID)
 
 
 ⚠️ MAS Version 1.9.0 is used in this fork. I've tested it was working with versions from Mojave thru Ventura ⚠️
@@ -61,6 +61,81 @@ $ mas install 634148309 --ver 16404831
 ==> Installing Logic Pro (10.0.3)
 ==> Installed Logic Pro (10.0.3)
 ```
+
+**That's it -- your app should now be in the Applications folder.**
+
+
+### 🛟 If an install fails after a download (package rescue + extraction)
+
+Sometimes the Mac App Store download succeeds but the install step fails (for example due to Gatekeeper policy, installer/receipt validation, or other system restrictions). When this happens, MAS may report an error like:
+
+```console
+Error: Download failed: The installation could not be started.
+```
+
+If an install fails after a download attempt, this patched version will attempt to rescue the downloaded package before macOS deletes the temporary files.
+
+You'll see the following reported:
+```console
+==> Install failed. Attempting to rescue and extract the downloaded package…
+```
+
+What'll happen next, is MAS will:
+
+Stage the App Store cached files (the in-progress .pkg and receipt) into:
+```console
+/Users/Shared/MASExtractedPkgs/.staging/<app-id>/
+```
+
+Extract the staged .pkg to:
+```console
+/Users/Shared/MASExtractedPkgs/<app-id>/<YYYYMMDD-HHMMSS>-<AppName>[-<bundleVersion>]/
+```
+
+Copy the receipt into the same output folder as:
+```console
+<app-id>-receipt
+```
+
+Once MAS is done extracting the downloaded pkg, you'll see the result along with the file path for the extracted app:
+```console
+=> Rescue extraction complete.
+==> Extracted app path:
+    /Users/Shared/MASExtractedPkgs/424389933/20260203-091512-Final Cut Pro-10.7.1/Applications/Final Cut Pro.app
+==> Receipt saved alongside extracted output:
+    /Users/Shared/MASExtractedPkgs/424389933/20260203-091512-Final Cut Pro-10.7.1/424389933-receipt
+```
+
+MAS will then ask you if you'd like to copy the app's associated Mac App Store receipt to the app bundle:
+```console
+“Would you like to copy the Mac App Store receipt into the extracted app bundle? [Y/N]”
+```
+
+1. If you answer Y, MAS will copy the receipt into:
+```console
+<AppName>.app/Contents/_MASReceipt/receipt
+```
+> Note: This is a copy, not a move. The <app-id>-receipt file remains alongside the extracted output.
+
+2. If you answer N, MAS will leave the extracted bundle as-is.
+
+
+After either selection, MAS will report:
+```console
+==> Done. Copy the extracted app to your /Applications folder to complete installation.
+```
+
+
+## 🧭 What you should do next
+
+Open the output folder printed by MAS, for example:
+```console
+/Users/Shared/MASExtractedPkgs/<app-id>/<timestamp>-<AppName>.../
+```
+
+Then copy <AppName>.app into your system /Applications folder.
+
+That’s it — you now have the extracted app available locally even though the Mac App Store install phase failed.
 
 
 ## ℹ️ Build from source
