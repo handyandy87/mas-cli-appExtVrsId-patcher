@@ -2,11 +2,12 @@
 //  PurchaseDownloadObserver.swift
 //  mas
 //
-//  Created by Andrew Naylor on 21/08/2015.
 //  Copyright (c) 2015 Andrew Naylor. All rights reserved.
 //
+//  Modified by github.com/handyandy87 on 02/03/2026 09:49:09 AM CST.
 
 import CommerceKit
+import Foundation
 import PromiseKit
 import StoreFoundation
 
@@ -20,6 +21,17 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
     private var errorHandler: ((MASError) -> Void)?
     private var priorPhaseType: Int64?
 
+    /// Stages the in-flight `.pkg` and `receipt` to `/Users/Shared/MASExtractedPkgs` so we can extract it
+    /// quickly if the install step fails after a download.
+    private var pkgRescuer: PkgRescuer?
+
+    /// Guard to avoid attempting rescue multiple times (we may see failure in both
+    /// `statusChangedFor` and `changedWithRemoval`).
+    private var didAttemptRescue = false
+
+    /// If rescue/extraction succeeds, suppress the downstream install error.
+    private var rescueSucceeded = false
+
     init(purchase: SSPurchase) {
         self.purchase = purchase
     }
@@ -28,12 +40,111 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
         // do nothing
     }
 
+    // MARK: - Receipt embedding
+
+    /// After a rescue extraction completes, optionally embed the receipt into the extracted app bundle.
+    ///
+    /// If the user answers "Y", copies the receipt (renamed to "receipt") into:
+    ///   <App>.app/Contents/_MASReceipt/receipt
+    private func promptToEmbedReceiptIfRequested(
+        appURL: URL,
+        extractedDirectory: URL,
+        stagedReceipt: URL?,
+        appID: UInt64
+    ) {
+        // Prefer the receipt we already copied into the output folder.
+        let fm = FileManager.default
+        let extractedReceipt = extractedDirectory.appendingPathComponent("\(appID)-receipt")
+        let receiptSource: URL?
+        if fm.fileExists(atPath: extractedReceipt.path) {
+            receiptSource = extractedReceipt
+        } else if let staged = stagedReceipt, fm.fileExists(atPath: staged.path) {
+            receiptSource = staged
+        } else {
+            printWarning("No receipt file was found to embed into the app bundle.")
+            return
+        }
+
+        // Don't prompt when stdin isn't interactive (e.g. piped/non-tty).
+        guard isatty(fileno(stdin)) != 0 else {
+            return
+        }
+
+        // Prompt the user.
+        printInfo("Would you like to copy the Mac App Store receipt into the extracted app bundle? [Y/N]")
+        print("Enter Y to copy the Mac App Store receipt into the app bundle, or N to skip: ", terminator: "")
+        fflush(stdout)
+        let response = (readLine(strippingNewline: true) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard response == "y" || response == "yes" else {
+            return
+        }
+
+        // Copy receipt into app bundle.
+        let destDir = appURL
+            .appendingPathComponent("Contents", isDirectory: true)
+            .appendingPathComponent("_MASReceipt", isDirectory: true)
+        let destReceipt = destDir.appendingPathComponent("receipt")
+
+        do {
+            try fm.createDirectory(at: destDir, withIntermediateDirectories: true, attributes: nil)
+            // Replace if present.
+            _ = try? fm.removeItem(at: destReceipt)
+            guard let src = receiptSource else { return }
+            try fm.copyItem(at: src, to: destReceipt)
+            printInfo("Receipt embedded at: \(destReceipt.path)")
+        } catch {
+            printError("Failed to embed receipt into app bundle: \(error.localizedDescription)")
+        }
+    }
+
     func downloadQueue(_ queue: CKDownloadQueue, statusChangedFor download: SSDownload) {
         guard
             download.metadata.itemIdentifier == purchase.itemIdentifier,
             let status = download.status
         else {
             return
+        }
+
+        // If we hit a failure state, attempt rescue immediately *before* removing the download.
+        // In some cases, `changedWithRemoval` is invoked after status becomes nil, which would
+        // prevent rescue from running there.
+        if status.isFailed, !didAttemptRescue {
+            didAttemptRescue = true
+            pkgRescuer?.stopMonitoring()
+
+            if let rescuer = pkgRescuer {
+                clearLine()
+                do {
+                    printInfo("Install failed. Attempting to rescue and extract the downloaded package…")
+                    let paths = try rescuer.rescueAndExtract(appName: download.metadata.title, bundleVersion: download.metadata.bundleVersion)
+                    rescueSucceeded = true
+                    printInfo("Rescue complete. Extracted to: \(paths.extractedDirectory.path)")
+                    if let app = paths.extractedApp {
+                        printInfo("Extracted app: \(app.path)")
+                        printInfo("Copy the extracted app into /Applications to install it.")
+
+                        // Offer to embed the receipt into the extracted app bundle.
+                        // If the user chooses "Y", copy the receipt (renamed to "receipt") to:
+                        // <App>.app/Contents/_MASReceipt/receipt
+                        self.promptToEmbedReceiptIfRequested(
+                            appURL: app,
+                            extractedDirectory: paths.extractedDirectory,
+                            stagedReceipt: paths.stagedReceipt,
+                            appID: purchase.itemIdentifier
+                        )
+
+                        printInfo("Done. Remember to move the extracted app into /Applications.")
+                    } else {
+                        printInfo("No .app bundle was found in the extracted folder above.")
+                        printInfo("Done. If an app bundle exists under the extracted folder, copy it into /Applications.")
+                    }
+                } catch {
+                    printError("Package rescue failed: \(error.localizedDescription)")
+                }
+            }
         }
 
         if status.isFailed || status.isCancelled {
@@ -62,27 +173,91 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
         guard download.metadata.itemIdentifier == purchase.itemIdentifier else {
             return
         }
+
+        // Start staging as soon as we know the download exists, so the `.pkg` is available
+        // if the install step fails later.
+        if pkgRescuer == nil {
+            pkgRescuer = PkgRescuer(appID: purchase.itemIdentifier)
+            pkgRescuer?.startMonitoring()
+        }
+
         clearLine()
         printInfo("Downloading \(download.progressDescription)")
     }
 
     func downloadQueue(_: CKDownloadQueue, changedWithRemoval download: SSDownload) {
-        guard
-            download.metadata.itemIdentifier == purchase.itemIdentifier,
-            let status = download.status
-        else {
+        guard download.metadata.itemIdentifier == purchase.itemIdentifier else {
+            pkgRescuer?.stopMonitoring()
+            pkgRescuer = nil
             return
         }
 
+        let status = download.status
+
+        pkgRescuer?.stopMonitoring()
+
         clearLine()
-        if status.isFailed {
-            errorHandler?(.downloadFailed(error: status.error as NSError?))
-        } else if status.isCancelled {
+        if status?.isFailed == true {
+            // If rescue already succeeded, treat this as success and suppress the original
+            // install failure output.
+            if rescueSucceeded {
+                completionHandler?()
+                pkgRescuer = nil
+                didAttemptRescue = false
+                rescueSucceeded = false
+                return
+            }
+
+            // Any failure after a download attempt: try to rescue and extract the staged `.pkg`.
+            // (The App Store cache file can disappear quickly once the system transitions.)
+            if !didAttemptRescue, let rescuer = pkgRescuer {
+                didAttemptRescue = true
+                do {
+                    printInfo("Install failed. Attempting to rescue and extract the downloaded package…")
+                    let paths = try rescuer.rescueAndExtract(
+                        appName: download.metadata.title,
+                        bundleVersion: download.metadata.bundleVersion
+                    )
+                    rescueSucceeded = true
+                    printInfo("Rescue complete. Extracted to: \(paths.extractedDirectory.path)")
+                    if let app = paths.extractedApp {
+                        printInfo("Extracted app: \(app.path)")
+                        printInfo("Copy the extracted app into /Applications to install it.")
+
+                        self.promptToEmbedReceiptIfRequested(
+                            appURL: app,
+                            extractedDirectory: paths.extractedDirectory,
+                            stagedReceipt: paths.stagedReceipt,
+                            appID: purchase.itemIdentifier
+                        )
+
+                        printInfo("Done. Remember to move the extracted app into /Applications.")
+                    } else {
+                        printInfo("No .app bundle was found in the extracted folder above.")
+                        printInfo("Done. If an app bundle exists under the extracted folder, copy it into /Applications.")
+                    }
+                } catch {
+                    // If rescue fails, continue with the original mas failure.
+                    printError("Package rescue failed: \(error.localizedDescription)")
+                }
+            }
+
+            // Suppress the default error output if rescue succeeded.
+            if rescueSucceeded {
+                completionHandler?()
+            } else {
+                errorHandler?(.downloadFailed(error: status?.error as NSError?))
+            }
+        } else if status?.isCancelled == true {
             errorHandler?(.cancelled)
         } else {
             printInfo("Installed \(download.progressDescription)")
             completionHandler?()
         }
+
+        pkgRescuer = nil
+        didAttemptRescue = false
+        rescueSucceeded = false
     }
 }
 
@@ -111,7 +286,8 @@ private func progress(_ state: ProgressState) {
 
 private extension SSDownload {
     var progressDescription: String {
-        "\(metadata.title) (\(metadata.bundleVersion ?? "unknown version"))"
+        let version = metadata.bundleVersion ?? "unknown version"
+        return "\(metadata.title) (\(version))"
     }
 }
 
@@ -138,11 +314,20 @@ extension PurchaseDownloadObserver {
     func observeDownloadQueue(_ downloadQueue: CKDownloadQueue = CKDownloadQueue.shared()) -> Promise<Void> {
         let observerID = downloadQueue.add(self)
 
+        // Start monitoring immediately after we register as an observer.
+        // Depending on timing, the download may already exist in the queue and
+        // `changedWithAddition` may not be invoked for this observer.
+        if pkgRescuer == nil {
+            pkgRescuer = PkgRescuer(appID: purchase.itemIdentifier)
+            pkgRescuer?.startMonitoring()
+        }
+
         return Promise<Void> { seal in
             errorHandler = seal.reject
             completionHandler = seal.fulfill_
         }
         .ensure {
+            self.pkgRescuer?.stopMonitoring()
             downloadQueue.remove(observerID)
         }
     }
