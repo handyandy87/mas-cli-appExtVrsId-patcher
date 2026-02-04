@@ -19,7 +19,7 @@ If you've downloaded the pre-built ZIP from the releases section of this repo an
 ```console
 cd ~/Downloads/mas190-verpkgextract-build/x86_64-apple-macosx/release/
 ```
-
+> Note: If you already have a version of MAS installed on your computer, you'll need to run this patched version of MAS using the full directory/app path (e.g., ~/Downloads/mas190-verpkgextract-build/x86_64-apple-macosx/release/**mas** ) as Terminal will call your installed version by default instead of this patched version, even when working within the patched directory.
 
 ### 🪪 App IDs
 
