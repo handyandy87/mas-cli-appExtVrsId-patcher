@@ -11,7 +11,7 @@ A command-line interface for the Mac App Store. Designed for scripting & automat
 
 ### 🖥 Usage
 
-To use this patched version of MAS 1.9.0, you'll need to either build from the source in this fork or download the release version.
+To use this patched version of MAS 1.9.0, you'll need to either build from the source in this repo or download the pre-buil ZIP release version.
 
 Open Terminal, and navigate to the directory where the patched version of MAS is located.
 
