@@ -1,5 +1,42 @@
 # Changelog
 
+## [mas-1.9.0-handyandy87-ver-rescue-lookup] - 2026-03-03
+
+This release adds a `--lookup` flag to `mas install`, enabling zero-download resolution of App External IDs to their version strings. Builds on the `--ver` and rescue capabilities from the previous release.
+
+### Added
+- **`--lookup` flag** for `mas install`
+  - Contacts Apple's servers, reads `bundleVersion` from CommerceKit download metadata, cancels the download immediately, and exits — nothing is written to disk.
+  - Bypasses the already-installed check so it works regardless of whether the app is currently installed.
+  - Output: `==> Version lookup: <AppName> (<version>)`
+  - Examples:
+    - `mas install 634148309 --ver 16404831 --lookup`
+    - `==> Version lookup: Logic Pro (10.0.3)`
+
+### Implementation notes
+
+**How it works:**
+The Mac App Store daemon (`storedownloadd`) populates download metadata — including `bundleVersion` — before any package bytes are transferred. `--lookup` intercepts this in the `CKDownloadQueueObserver` callback, prints the version, and calls `removeDownload` to cancel cleanly. A secondary fallback in `statusChangedFor` handles older App External IDs where `changedWithAddition` is skipped by CommerceKit.
+
+#### Modified files
+- `Sources/mas/Commands/Install.swift`
+  - Adds `--lookup` flag (`lookupOnly: Bool`)
+  - Skips already-installed filter when `lookupOnly` is true
+  - Passes `lookupOnly` into `downloadApps`
+- `Sources/mas/AppStore/Downloader.swift`
+  - Threads `lookupOnly` through `downloadApps(withAppIDs:verifiedBy:)`, `downloadApps(withAppIDs:)`, and `downloadApp(withAppID:)`
+  - Skips retry logic when `lookupOnly` is true
+- `Sources/mas/AppStore/SSPurchase.swift`
+  - Threads `lookupOnly` through both `perform()` call sites into `PurchaseDownloadObserver`
+- `Sources/mas/AppStore/PurchaseDownloadObserver.swift`
+  - `changedWithAddition`: if `lookupOnly`, print version, call `removeDownload`, fulfill promise, return immediately
+  - `statusChangedFor`: fallback for old IDs where `changedWithAddition` is skipped — intercepts on first status callback instead
+  - `changedWithRemoval`: suppresses `.cancelled` error when `lookupOnly` (cancellation is intentional)
+
+### Known limitations
+- A small number of very old or retired App External IDs return "User selected cancel button" from Apple's servers and cannot be resolved.
+- Rate limiting from Apple's ISS endpoint can occur during bulk lookups. A delay of ~15 seconds between requests is recommended.
+
 ## [mas-1.9.0-handyandy87-ver-rescue] - 2026-02-03
 
 This release extends MAS 1.9.0 with two main capabilities added:
