@@ -11,7 +11,7 @@ import PromiseKit
 import StoreFoundation
 
 extension SSPurchase {
-    func perform(appID: AppID, purchasing: Bool, appExtVrsId: Int = 0) -> Promise<Void> {
+    func perform(appID: AppID, purchasing: Bool, appExtVrsId: Int = 0, lookupOnly: Bool = false) -> Promise<Void> {
         var parameters =
             [
                 "productType": "C",
@@ -46,7 +46,7 @@ extension SSPurchase {
         // redownloads without passing any account IDs to SSPurchase.
         // https://github.com/mas-cli/mas/issues/417
         if #available(macOS 12, *) {
-            return perform()
+            return perform(lookupOnly: lookupOnly)
         }
 
         return
@@ -54,11 +54,11 @@ extension SSPurchase {
             .then { storeAccount in
                 self.accountIdentifier = storeAccount.dsID
                 self.appleID = storeAccount.identifier
-                return self.perform()
+                return self.perform(lookupOnly: lookupOnly)
             }
     }
 
-    private func perform() -> Promise<Void> {
+    private func perform(lookupOnly: Bool = false) -> Promise<Void> {
         Promise<SSPurchase> { seal in
             CKPurchaseController.shared()
                 .perform(self, withOptions: 0) { purchase, _, error, response in
@@ -76,7 +76,7 @@ extension SSPurchase {
                 }
         }
         .then { purchase in
-            PurchaseDownloadObserver(purchase: purchase).observeDownloadQueue()
+            PurchaseDownloadObserver(purchase: purchase, lookupOnly: lookupOnly).observeDownloadQueue()
         }
     }
 }

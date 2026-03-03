@@ -32,8 +32,13 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
     /// If rescue/extraction succeeds, suppress the downstream install error.
     private var rescueSucceeded = false
 
-    init(purchase: SSPurchase) {
+    /// When true, cancel the download immediately after reading bundleVersion from metadata.
+    /// Prints "==> Version lookup: <AppName> (<version>)" and fulfills without downloading anything.
+    let lookupOnly: Bool
+
+    init(purchase: SSPurchase, lookupOnly: Bool = false) {
         self.purchase = purchase
+        self.lookupOnly = lookupOnly
     }
 
     deinit {
@@ -108,6 +113,18 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
             return
         }
 
+        // Lookup-only fallback: if changedWithAddition was skipped (can happen for old IDs),
+        // intercept here on the first status update instead.
+        if lookupOnly && !didAttemptRescue {
+            didAttemptRescue = true  // reuse flag to ensure we only fire once
+            let version = download.metadata.bundleVersion ?? "unknown"
+            let title   = download.metadata.title ?? "unknown"
+            printInfo("Version lookup: \(title) (\(version))")
+            queue.removeDownload(withItemIdentifier: download.metadata.itemIdentifier)
+            completionHandler?()
+            return
+        }
+
         // If we hit a failure state, attempt rescue immediately *before* removing the download.
         // In some cases, `changedWithRemoval` is invoked after status becomes nil, which would
         // prevent rescue from running there.
@@ -169,8 +186,18 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
         }
     }
 
-    func downloadQueue(_: CKDownloadQueue, changedWithAddition download: SSDownload) {
+    func downloadQueue(_ queue: CKDownloadQueue, changedWithAddition download: SSDownload) {
         guard download.metadata.itemIdentifier == purchase.itemIdentifier else {
+            return
+        }
+
+        // In lookup-only mode: print the version and immediately cancel — nothing is downloaded.
+        if lookupOnly {
+            let version = download.metadata.bundleVersion ?? "unknown"
+            let title   = download.metadata.title ?? "unknown"
+            printInfo("Version lookup: \(title) (\(version))")
+            queue.removeDownload(withItemIdentifier: download.metadata.itemIdentifier)
+            completionHandler?()
             return
         }
 
@@ -249,7 +276,12 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
                 errorHandler?(.downloadFailed(error: status?.error as NSError?))
             }
         } else if status?.isCancelled == true {
-            errorHandler?(.cancelled)
+            // In lookup-only mode the cancellation is intentional — suppress the error.
+            if lookupOnly {
+                completionHandler?()
+            } else {
+                errorHandler?(.cancelled)
+            }
         } else {
             printInfo("Installed \(download.progressDescription)")
             completionHandler?()
