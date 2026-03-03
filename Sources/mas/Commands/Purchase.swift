@@ -4,6 +4,7 @@
 //
 //  Copyright (c) 2017 Jakob Rieck. All rights reserved.
 //
+//  Modified by github.com/handyandy87 on 02/03/2026 09:49:09 AM CST.
 
 import ArgumentParser
 import CommerceKit
@@ -14,6 +15,9 @@ extension MAS {
             abstract: "\"Purchase\" and install free apps from the Mac App Store"
         )
 
+        /// Install a specific historical version of a free app by its App External Version ID.
+        /// When provided, overrides the default `appExtVrsId` (0) used for App Store downloads.
+        /// Also supports `-ver` as a shorthand alias (e.g., `mas purchase 634148309 -ver 16404831`).
         @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
         var appExtVrsId: Int = 0
 

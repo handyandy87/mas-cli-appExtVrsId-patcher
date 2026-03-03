@@ -4,6 +4,7 @@
 //
 //  Copyright (c) 2015 Andrew Naylor. All rights reserved.
 //
+//  Modified by github.com/handyandy87 on 02/03/2026 09:49:09 AM CST.
 
 import CommerceKit
 import Foundation
@@ -14,6 +15,20 @@ private let downloadingPhase = 0 as Int64
 private let installingPhase = 1 as Int64
 private let downloadedPhase = 5 as Int64
 
+/// Observes App Store download queue events to provide three capabilities:
+///
+/// 1. **Version Lookup** (`lookupOnly`): When enabled, intercepts the CommerceKit metadata callback,
+///    extracts the `bundleVersion`, prints it, cancels the download immediately, and fulfills without
+///    downloading any bytes. Useful for resolving App External IDs to their version strings.
+///    Fallback logic handles older App External IDs where `changedWithAddition` is skipped by CommerceKit.
+///
+/// 2. **Package Rescue + Extraction**: When an install fails after a successful download, automatically
+///    stages the in-flight `.pkg` and `receipt` from the App Store cache to `/Users/Shared/MASExtractedPkgs`
+///    and extracts them. Stages to `.staging/<app-id>/` during download, extracts to `<app-id>/<timestamp>/`
+///    on install failure. Prompts user to optionally embed the receipt into the extracted app bundle.
+///
+/// 3. **Error Suppression for Successful Rescues**: If package rescue and extraction succeeds,
+///    suppresses the downstream install error so the overall command completes successfully.
 class PurchaseDownloadObserver: CKDownloadQueueObserver {
     private let purchase: SSPurchase
     private var completionHandler: (() -> Void)?
