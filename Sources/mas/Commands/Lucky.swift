@@ -4,7 +4,7 @@
 //
 //  Copyright © 2016 Andrew Naylor. All rights reserved.
 //
-//  Modified by github.com/handyandy87 on 02/03/2026 09:49:09 AM CST.
+//  Modified by github.com/handyandy87 on 03/03/2026 07:51:00 PM CST.
 
 import ArgumentParser
 import CommerceKit
@@ -25,6 +25,9 @@ extension MAS {
         @Flag(help: "Force reinstall")
         var force = false
 
+        /// Install a specific historical version of the search result app by its App External Version ID.
+        /// When provided, overrides the default `appExtVrsId` (0) used for App Store downloads.
+        /// Also supports `-ver` as a shorthand alias (e.g., `mas lucky "Logic Pro" -ver 16404831`).
         @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
         var appExtVrsId: Int = 0
         @Argument(help: "Search term")

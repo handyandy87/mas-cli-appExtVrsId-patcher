@@ -4,7 +4,7 @@
 //
 //  Copyright (c) 2015 Andrew Naylor. All rights reserved.
 //
-//  Modified by github.com/handyandy87 on 02/03/2026 09:49:09 AM CST.
+//  Modified by github.com/handyandy87 on 03/03/2026 07:51:00 PM CST.
 
 import ArgumentParser
 import CommerceKit
@@ -19,11 +19,19 @@ extension MAS {
         @Flag(help: "Force reinstall")
         var force = false
 
-        @Flag(name: .customLong("lookup"), help: "Look up version for the given --ver appExtVrsId without downloading. Prints '==> Version lookup: <AppName> (<version>)' and exits.")
-        var lookupOnly = false
-
+        /// Install a specific historical version of an app by its App External Version ID.
+        /// When provided, overrides the default `appExtVrsId` (0) used for App Store downloads.
+        /// Allows installation of older versions of Mac App Store apps that are no longer available in the public catalog.
+        /// Also supports `-ver` as a shorthand alias (e.g., `mas install 634148309 -ver 16404831`).
         @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
         var appExtVrsId: Int = 0
+
+        /// Resolve an App External Version ID to its version string without downloading.
+        /// Contacts Apple's servers to read the `bundleVersion` from CommerceKit metadata, cancels the download immediately, and exits.
+        /// Nothing is written to disk. Useful for resolving unknown App External IDs to their version strings in bulk.
+        /// Must be used together with `--ver` to specify which version to lookup.
+        @Flag(name: .customLong("lookup"), help: "Look up version for the given --ver appExtVrsId without downloading. Prints '==> Version lookup: <AppName> (<version>)' and exits.")
+        var lookupOnly = false
 
         @Argument(help: ArgumentHelp("App ID", valueName: "app-id"))
         var appIDs: [AppID]

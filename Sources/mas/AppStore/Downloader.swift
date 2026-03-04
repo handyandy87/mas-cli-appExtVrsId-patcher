@@ -4,7 +4,7 @@
 //
 //  Copyright (c) 2015 Andrew Naylor. All rights reserved.
 //
-//  Modified by github.com/handyandy87 on 02/03/2026 09:49:09 AM CST.
+//  Modified by github.com/handyandy87 on 03/03/2026 07:51:00 PM CST.
 
 import CommerceKit
 import PromiseKit
@@ -18,6 +18,8 @@ import StoreFoundation
 ///   - unverifiedAppIDs: The app IDs of the apps to be verified and downloaded.
 ///   - searcher: The `AppStoreSearcher` used to verify app IDs.
 ///   - purchasing: Flag indicating if the apps will be purchased. Only works for free apps. Defaults to false.
+///   - appExtVrsId: App External Version ID to request a specific historical version (0 = latest). Passed through to the purchase/download flow.
+///   - lookupOnly: When true, resolve the App External Version ID to its version string without downloading. Skips retry logic for lookup failures.
 /// - Returns: A `Promise` that completes when the downloads are complete. If any fail,
 ///   the promise is rejected with the first error, after all remaining downloads are attempted.
 func downloadApps(
@@ -52,6 +54,8 @@ func downloadApps(
 /// - Parameters:
 ///   - appIDs: The app IDs of the apps to be downloaded.
 ///   - purchasing: Flag indicating if the apps will be purchased. Only works for free apps. Defaults to false.
+///   - appExtVrsId: App External Version ID to request a specific historical version (0 = latest). Passed through to the purchase/download flow.
+///   - lookupOnly: When true, resolve the App External Version ID to its version string without downloading. Skips retry logic for lookup failures.
 /// - Returns: A promise that completes when the downloads are complete. If any fail,
 ///   the promise is rejected with the first error, after all remaining downloads are attempted.
 func downloadApps(withAppIDs appIDs: [AppID], purchasing: Bool = false, appExtVrsId: Int = 0, lookupOnly: Bool = false) -> Promise<Void> {
@@ -75,6 +79,15 @@ func downloadApps(withAppIDs appIDs: [AppID], purchasing: Bool = false, appExtVr
         }
 }
 
+/// Downloads a single app with optional version override and lookup-only mode.
+///
+/// - Parameters:
+///   - appID: The App Store item ID.
+///   - purchasing: Whether this is a "purchase" (free app install confirmation) or a standard redownload.
+///   - appExtVrsId: App External Version ID to request a specific historical version (0 = latest).
+///   - lookupOnly: When true, cancels the download immediately after reading metadata without downloading bytes.
+///   - attemptCount: Number of retry attempts for network failures. Skipped entirely in lookup-only mode.
+/// - Returns: A Promise that fulfills when the download completes (or is cancelled in lookup-only mode).
 private func downloadApp(
     withAppID appID: AppID,
     purchasing: Bool = false,

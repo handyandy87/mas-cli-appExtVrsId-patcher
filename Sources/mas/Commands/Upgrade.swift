@@ -4,7 +4,7 @@
 //
 //  Copyright © 2015 Andrew Naylor. All rights reserved.
 //
-//  Modified by github.com/handyandy87 on 02/03/2026 09:49:09 AM CST.
+//  Modified by github.com/handyandy87 on 03/03/2026 07:51:00 PM CST.
 
 import ArgumentParser
 import Foundation
@@ -17,6 +17,9 @@ extension MAS {
             abstract: "Upgrade outdated app(s) installed from the Mac App Store"
         )
 
+        /// Upgrade to a specific historical version of an app by its App External Version ID.
+        /// When provided, overrides the default `appExtVrsId` (0) used for App Store downloads.
+        /// Allows downgrading to or upgrading to specific versions. Also supports `-ver` as a shorthand alias.
         @Option(name: .customLong("ver"), help: "Override the appExtVrsId parameter used for App Store downloads (default: 0). You can also pass '-ver' as a shorthand alias.")
         var appExtVrsId: Int = 0
 
