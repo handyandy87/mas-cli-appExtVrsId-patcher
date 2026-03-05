@@ -103,6 +103,20 @@ Would you like to copy the Mac App Store receipt into the extracted app bundle? 
 
 ---
 
+## 🗂️ mas-legacyapps — Legacy App Installer
+
+Need to restore a full suite of Pro or productivity apps for an older macOS release? **`mas-legacyapps`** is a companion tool built on top of this patcher. It bundles App External Version ID data for every supported macOS release and walks you through a set of interactive menus — or accepts flags to run fully automated.
+
+**Supported macOS releases:** High Sierra · Mojave · Catalina · Monterey
+
+```console
+$ mas-legacyapps --os catalina --category pro --all --yes
+```
+
+→ [standalone/mas-legacyapps/README.md](standalone/mas-legacyapps/README.md)
+
+---
+
 ## 🔧 Build from source
 
 ```shell
