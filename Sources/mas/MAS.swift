@@ -26,6 +26,7 @@ struct MAS: ParsableCommand {
             Purchase.self,
             Region.self,
             Reset.self,
+            Restore.self,
             Search.self,
             SignIn.self,
             SignOut.self,
