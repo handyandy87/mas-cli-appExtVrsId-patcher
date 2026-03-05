@@ -12,44 +12,58 @@ extension MAS {
     /// Interactively installs the last compatible versions of Apple Pro and
     /// productivity apps for a chosen macOS release.
     ///
-    /// Presents an OS selection menu, an app toggle list, a confirmation prompt, then
-    /// runs installs sequentially. Apps not in the user's purchase history are skipped
-    /// automatically with a clear message. If the App Store install step fails after a
-    /// successful download, the package rescue and extraction flow activates exactly as
-    /// it does in `mas install`.
+    /// Flow: OS selection → category selection → optional Xcode → per-app toggle
+    ///       → confirmation → sequential install → summary + log.
+    ///
+    /// Apps not in the user's purchase history are skipped with a clear message.
+    /// Install failures trigger the same package rescue/extraction flow as `mas install --ver`.
     struct Restore: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Install last-compatible Apple Pro & productivity apps for a macOS release",
             discussion: """
-            Presents a menu to select a macOS release, then installs the last compatible
-            version of each Apple Pro and productivity app from the App Store.
+            Presents a menu to select a macOS release and an app category, then
+            installs the last compatible version of each app from the App Store.
+
+            App categories:
+              pro    — Final Cut Pro, Compressor, Motion, Logic Pro, MainStage, GarageBand
+              iwork  — Keynote, Numbers, Pages, iMovie
+              all    — Both groups above
+
+            Xcode is always offered as a separate optional install because of its size.
 
             Apps not in your purchase history are skipped automatically.
-            If the App Store install step fails, the downloaded .pkg is rescued and extracted
+            If the App Store install step fails, the .pkg is rescued and extracted
             to /Users/Shared/MASExtractedPkgs/ (same as `mas install --ver`).
 
-            Currently covers:
-              • High Sierra  (10.13)
-              • Mojave       (10.14)
-              • Catalina     (10.15)
-              • Monterey     (12.0)
-
+            Currently covers: High Sierra (10.13), Mojave (10.14), Catalina (10.15), Monterey (12).
             Big Sur, Ventura, Sonoma, and Sequoia data is not yet available.
 
             Examples:
-              mas restore                          # fully interactive
-              mas restore --os catalina            # skip OS selection
-              mas restore --os monterey --all      # skip app toggle
-              mas restore --os mojave --all --yes  # fully automated (no prompts)
-              mas restore --delay 30               # 30-second inter-app delay
+              mas restore                               # fully interactive
+              mas restore --os catalina                 # skip OS selection
+              mas restore --os monterey --category pro  # skip OS + category selection
+              mas restore --os mojave --category all --xcode --all --yes  # fully automated
+              mas restore --delay 30                    # 30-second inter-app delay
             """
         )
 
         @Option(
             name: .customLong("os"),
-            help: "macOS version to target, e.g. 'monterey', 'catalina'. Skips the interactive OS selection menu."
+            help: "macOS version to target, e.g. 'monterey', 'catalina'. Skips the interactive OS menu."
         )
         var targetOS: String?
+
+        @Option(
+            name: .customLong("category"),
+            help: "App category to install: 'pro', 'iwork', or 'all'. Skips the interactive category menu."
+        )
+        var targetCategory: String?
+
+        @Flag(
+            name: .customLong("xcode"),
+            help: "Include Xcode without prompting. Only relevant when Xcode is available for the selected OS."
+        )
+        var includeXcode = false
 
         @Option(
             name: .customLong("delay"),
@@ -59,7 +73,7 @@ extension MAS {
 
         @Flag(
             name: .customLong("all"),
-            help: "Skip the per-app toggle menu and install everything for the selected OS."
+            help: "Skip the per-app toggle menu and install everything in the selected category."
         )
         var installAll = false
 
@@ -69,24 +83,63 @@ extension MAS {
         )
         var skipConfirmation = false
 
+        // MARK: - Category model (selection-level, distinct from AppCategory)
+
+        private enum CategorySelection {
+            case pro, iWork, all
+
+            var displayName: String {
+                switch self {
+                case .pro:   return "Pro Apps"
+                case .iWork: return "iWork & Media"
+                case .all:   return "All"
+                }
+            }
+
+            var appSummary: String {
+                switch self {
+                case .pro:   return "Final Cut Pro, Compressor, Motion, Logic Pro, MainStage, GarageBand"
+                case .iWork: return "Keynote, Numbers, Pages, iMovie"
+                case .all:   return "Pro Apps + iWork & Media"
+                }
+            }
+
+            func matches(_ category: AppCategory) -> Bool {
+                switch self {
+                case .pro:   return category == .pro
+                case .iWork: return category == .iWork
+                case .all:   return category == .pro || category == .iWork
+                }
+            }
+        }
+
         // MARK: - Entry point
 
         func run() throws {
             printBanner()
 
             let release = try resolveRelease()
-            let selected = try resolveApps(for: release)
+            let categorySelection = try resolveCategorySelection(for: release)
+            let xcodeIncluded = try resolveXcode(for: release)
+            let candidateApps = applyFilter(release.apps, category: categorySelection, includeXcode: xcodeIncluded)
 
-            guard !selected.isEmpty else {
+            guard !candidateApps.isEmpty else {
+                printInfo("No apps match the selected options. Exiting.")
+                return
+            }
+
+            let selectedApps = installAll ? candidateApps : try promptForApps(candidateApps, release: release)
+
+            guard !selectedApps.isEmpty else {
                 printInfo("No apps selected. Exiting.")
                 return
             }
 
             if !skipConfirmation {
-                try confirmInstall(apps: selected, release: release)
+                try confirmInstall(apps: selectedApps, release: release)
             }
 
-            let outcomes = performInstalls(apps: selected)
+            let outcomes = performInstalls(apps: selectedApps)
             printSummary(outcomes: outcomes, release: release)
             writeLog(outcomes: outcomes, release: release)
         }
@@ -115,7 +168,10 @@ extension MAS {
                 let num = "\(index + 1).".padding(toLength: 4, withPad: " ", startingAt: 0)
                 let displayName = "\(release.name) (\(release.displayVersion))"
                     .padding(toLength: 24, withPad: " ", startingAt: 0)
-                print("  \(num)  \(displayName)  \(release.apps.count) apps")
+                let xcodeNote = release.hasXcode ? " + Xcode" : ""
+                let proCount = release.apps.filter { $0.category == .pro }.count
+                let iWorkCount = release.apps.filter { $0.category == .iWork }.count
+                print("  \(num)  \(displayName)  \(proCount) Pro, \(iWorkCount) iWork\(xcodeNote)")
             }
 
             print()
@@ -137,20 +193,97 @@ extension MAS {
             }
         }
 
-        // MARK: - App selection
+        // MARK: - Category selection
 
-        private func resolveApps(for release: MacOSRelease) throws -> [LegacyApp] {
-            if installAll {
-                return release.apps
+        private func resolveCategorySelection(for release: MacOSRelease) throws -> CategorySelection {
+            if let targetCategory {
+                switch targetCategory.lowercased() {
+                case "pro":         return .pro
+                case "iwork":       return .iWork
+                case "all":         return .all
+                default:
+                    throw MASError.runtimeError(
+                        "Unknown category '\(targetCategory)'. Valid options: 'pro', 'iwork', 'all'."
+                    )
+                }
             }
-            return try promptForApps(from: release)
+
+            return try promptForCategory(release: release)
         }
 
-        private func promptForApps(from release: MacOSRelease) throws -> [LegacyApp] {
+        private func promptForCategory(release: MacOSRelease) throws -> CategorySelection {
+            let allOptions: [CategorySelection] = [.pro, .iWork, .all]
+
+            print()
+            print("What would you like to install for \(release.name) (\(release.displayVersion))?\n")
+
+            for (index, option) in allOptions.enumerated() {
+                let num = "\(index + 1).".padding(toLength: 4, withPad: " ", startingAt: 0)
+                let label = option.displayName.padding(toLength: 18, withPad: " ", startingAt: 0)
+                print("  \(num)  \(label)  \(option.appSummary)")
+            }
+
+            print()
+            print("  (Xcode will be offered separately regardless of your choice.)")
+            print()
+
+            while true {
+                print("Enter a number (or 'q' to quit): ", terminator: "")
+                fflush(stdout)
+
+                let raw = (readLine() ?? "").trimmingCharacters(in: .whitespaces)
+
+                if raw.lowercased() == "q" {
+                    throw MASError.runtimeError("Cancelled by user.")
+                }
+                if let choice = Int(raw), choice >= 1, choice <= allOptions.count {
+                    let selected = allOptions[choice - 1]
+                    printInfo("Category: \(selected.displayName)")
+                    return selected
+                }
+
+                print("  Please enter a number from 1 to \(allOptions.count).\n")
+            }
+        }
+
+        // MARK: - Xcode selection
+
+        private func resolveXcode(for release: MacOSRelease) throws -> Bool {
+            guard release.hasXcode else { return false }
+
+            // Non-interactive: honour the --xcode flag; default to false when --yes skips prompts.
+            if includeXcode { return true }
+            if skipConfirmation { return false }
+
+            guard let xcodeEntry = release.apps.first(where: { $0.category == .xcode }) else {
+                return false
+            }
+
+            print()
+            print("Xcode \(xcodeEntry.version) is available (~\(String(format: "%.0f", xcodeEntry.estimatedSizeGB)) GB).")
+            print("Include it? [y/N]: ", terminator: "")
+            fflush(stdout)
+
+            let answer = (readLine() ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            return answer == "y" || answer == "yes"
+        }
+
+        // MARK: - App filtering
+
+        private func applyFilter(_ apps: [LegacyApp], category: CategorySelection, includeXcode: Bool) -> [LegacyApp] {
+            apps.filter { app in
+                if app.category == .xcode { return includeXcode }
+                return category.matches(app.category)
+            }
+        }
+
+        // MARK: - Per-app toggle
+
+        private func promptForApps(_ candidates: [LegacyApp], release: MacOSRelease) throws -> [LegacyApp] {
             var deselected = Set<Int>()
 
             while true {
-                printAppTable(release: release, deselected: deselected)
+                printAppTable(candidates, release: release, deselected: deselected)
 
                 print("  Enter a number to toggle on/off, 'a' for all, Enter to proceed, 'q' to quit")
                 print()
@@ -161,7 +294,7 @@ extension MAS {
 
                 switch raw.lowercased() {
                 case "":
-                    return release.apps.enumerated()
+                    return candidates.enumerated()
                         .filter { !deselected.contains($0.offset) }
                         .map { $0.element }
                 case "q":
@@ -169,7 +302,7 @@ extension MAS {
                 case "a":
                     deselected.removeAll()
                 default:
-                    if let num = Int(raw), num >= 1, num <= release.apps.count {
+                    if let num = Int(raw), num >= 1, num <= candidates.count {
                         let idx = num - 1
                         if deselected.contains(idx) {
                             deselected.remove(idx)
@@ -183,20 +316,26 @@ extension MAS {
             }
         }
 
-        private func printAppTable(release: MacOSRelease, deselected: Set<Int>) {
-            let selectedCount = release.apps.count - deselected.count
-            let totalGB = release.apps.enumerated()
+        private func printAppTable(_ candidates: [LegacyApp], release: MacOSRelease, deselected: Set<Int>) {
+            let selectedCount = candidates.count - deselected.count
+            let totalGB = candidates.enumerated()
                 .filter { !deselected.contains($0.offset) }
                 .reduce(0.0) { $0 + $1.element.estimatedSizeGB }
 
             print()
-            print("  Apps for \(release.name) (\(release.displayVersion))")
-            print("  \(selectedCount)/\(release.apps.count) selected  •  ~\(String(format: "%.1f", totalGB)) GB estimated download")
+            print("  \(release.name) (\(release.displayVersion)) — \(selectedCount)/\(candidates.count) selected  •  ~\(String(format: "%.1f", totalGB)) GB")
             print()
-            print("  #    On    \("App".padding(toLength: 16, withPad: " ", startingAt: 0))  \("Version".padding(toLength: 10, withPad: " ", startingAt: 0))  Est. Size")
-            print("  \(String(repeating: "─", count: 58))")
+            print("  #    On    \("App".padding(toLength: 16, withPad: " ", startingAt: 0))  \("Version".padding(toLength: 10, withPad: " ", startingAt: 0))  Size")
+            print("  \(String(repeating: "─", count: 56))")
 
-            for (idx, app) in release.apps.enumerated() {
+            var lastCategory: AppCategory?
+            for (idx, app) in candidates.enumerated() {
+                // Print a blank separator line between category groups
+                if let last = lastCategory, last != app.category {
+                    print()
+                }
+                lastCategory = app.category
+
                 let toggle = deselected.contains(idx) ? "[ ]" : "[✓]"
                 let numStr = "\(idx + 1)".padding(toLength: 4, withPad: " ", startingAt: 0)
                 let name = app.name.padding(toLength: 16, withPad: " ", startingAt: 0)
@@ -274,7 +413,6 @@ extension MAS {
                     results.append(AppOutcome(app: app, outcome: .failed(error.localizedDescription)))
                 }
 
-                // Pause between installs to respect Apple's rate limiter, except after the last app.
                 if index < apps.count - 1 && delay > 0 {
                     print()
                     printInfo("Waiting \(delay)s before next install…")
@@ -380,11 +518,9 @@ extension MAS {
             ╚═══════════════════════════════════════════════════════════════════╝
 
             Installs the last compatible version of Apple's Pro and productivity
-            apps for a selected macOS release.
-
-            Apps not in your purchase history are skipped with a clear message.
-            If an install fails after downloading, the .pkg is automatically
-            rescued and extracted to /Users/Shared/MASExtractedPkgs/.
+            apps for a selected macOS release. Apps not in your purchase history
+            are skipped with a clear message. Install failures trigger automatic
+            .pkg rescue and extraction to /Users/Shared/MASExtractedPkgs/.
 
             Note: Currently covers High Sierra → Monterey only.
             """)
