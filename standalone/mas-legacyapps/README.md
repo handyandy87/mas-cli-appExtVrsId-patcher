@@ -1,10 +1,16 @@
 # mas-legacyapps
 
-A command-line tool for macOS that interactively installs the **last compatible version** of Apple's Pro and productivity apps for a given macOS release, using App External Version IDs from this repository.
+A command-line tool for macOS that interactively installs the **last compatible version** of Apple's Pro and productivity apps for a given macOS release, using App External Version IDs sourced from the [Pro-Apps-App-External-IDs](https://github.com/handyandy87/Pro-Apps-App-External-IDs) repository.
 
-## What it does
+Built on top of [mas-cli-appExtVrsId-patcher](https://github.com/handyandy87/mas-cli-appExtVrsId-patcher).
 
-Running `mas-legacyapps` walks you through three short menus, then downloads and installs each app automatically:
+> ⚠️ Apps must be purchased under your Apple ID. Apps you've never bought are automatically skipped.
+
+---
+
+## 📋 What it does
+
+Running `mas-legacyapps` walks you through a short set of menus, then downloads and installs each app automatically:
 
 1. **Select a macOS release** — High Sierra, Mojave, Catalina, or Monterey
 2. **Select a category** — Pro Apps, iWork & Media, or All
@@ -18,7 +24,7 @@ A log file is written to `~/.mas-legacyapps-<timestamp>.log` after each run.
 
 ### Example session
 
-```
+```console
 ╔═══════════════════════════════════════════════════════════════════╗
 ║         mas-legacyapps — Apple Pro & Productivity Apps            ║
 ╚═══════════════════════════════════════════════════════════════════╝
@@ -60,21 +66,21 @@ Proceed? [Y/n]: y
 
 ---
 
-## Requirements
+## ✅ Requirements
 
 - **macOS 10.13 (High Sierra) or later** — the tool links against Apple's private `CommerceKit` and `StoreFoundation` frameworks, which are only present on macOS.
 - **Signed into the Mac App Store** — open the App Store app and sign in with your Apple ID before running.
-- **Apps must be purchased** under your Apple ID — apps you've never bought will be skipped.
-- **Xcode Command Line Tools** — needed to build the tool (`xcode-select --install`).
+- **Apps must be purchased** under your Apple ID — apps you've never bought will be skipped automatically.
+- **Xcode Command Line Tools** — needed to build the tool from source (`xcode-select --install`).
 
 ---
 
-## Installation
+## ⬇️ Installation
 
 ### Build from source
 
-```bash
-# Clone (or add as a subdirectory) this repo
+```shell
+# Clone the companion repository
 git clone https://github.com/handyandy87/Pro-Apps-App-External-IDs.git
 cd Pro-Apps-App-External-IDs/mas-legacyapps
 
@@ -85,68 +91,65 @@ swift build --configuration release
 sudo cp .build/release/mas-legacyapps /usr/local/bin/
 ```
 
-Or use the convenience script:
+Or use the convenience scripts:
 
-```bash
+```shell
 script/build          # build only
 script/install        # build + copy to /usr/local/bin
 ```
 
 ### Verify the install
 
-```bash
-mas-legacyapps --help
+```console
+$ mas-legacyapps --help
 ```
 
 ---
 
-## Usage
+## 🖥️ Usage
 
 ### Fully interactive (recommended for first-time users)
 
-```bash
-mas-legacyapps
+```console
+$ mas-legacyapps
 ```
 
 Walk through the menus for OS, category, Xcode, and app selection.
 
 ### Skip the OS selection menu
 
-```bash
-mas-legacyapps --os catalina
-mas-legacyapps --os monterey
-mas-legacyapps --os mojave
-mas-legacyapps --os highsierra
+```console
+$ mas-legacyapps --os catalina
+$ mas-legacyapps --os monterey
+$ mas-legacyapps --os mojave
+$ mas-legacyapps --os highsierra
 ```
 
 ### Skip the category menu
 
-```bash
-mas-legacyapps --os monterey --category pro
-mas-legacyapps --os catalina --category iwork
-mas-legacyapps --os mojave   --category all
+```console
+$ mas-legacyapps --os monterey --category pro
+$ mas-legacyapps --os catalina --category iwork
+$ mas-legacyapps --os mojave   --category all
 ```
 
 ### Include Xcode without being prompted
 
-```bash
-mas-legacyapps --os catalina --category all --xcode
+```console
+$ mas-legacyapps --os catalina --category all --xcode
 ```
 
 ### Skip the per-app toggle and install everything
 
-```bash
-mas-legacyapps --os monterey --category pro --all
+```console
+$ mas-legacyapps --os monterey --category pro --all
 ```
 
 ### Fully automated (no prompts at all)
 
-```bash
-# Install all Pro Apps for Catalina, no delays between apps, no prompts
-mas-legacyapps --os catalina --category pro --all --yes --delay 0
-
-# Install everything for Monterey including Xcode
-mas-legacyapps --os monterey --category all --xcode --all --yes
+```console
+$ mas-legacyapps --os catalina --category pro --all --yes --delay 0
+$ mas-legacyapps --os monterey --category all --xcode --all --yes
 ```
 
 > **Note:** In automated mode (`--yes`), Xcode is only included when `--xcode` is explicitly passed. This prevents accidentally queuing a 12 GB download in scripts.
@@ -155,14 +158,14 @@ mas-legacyapps --os monterey --category all --xcode --all --yes
 
 Apple's servers can throttle rapid sequential downloads. The default delay between apps is **15 seconds**. Adjust with `--delay`:
 
-```bash
-mas-legacyapps --delay 30   # 30 seconds between apps
-mas-legacyapps --delay 0    # no delay (use only for 1–2 apps)
+```console
+$ mas-legacyapps --delay 30   # 30 seconds between apps
+$ mas-legacyapps --delay 0    # no delay (use only for 1–2 apps)
 ```
 
 ---
 
-## App coverage
+## 📦 App coverage
 
 | macOS Release | Version | Pro Apps | iWork & Media | Xcode |
 |---|---|---|---|---|
@@ -172,11 +175,11 @@ mas-legacyapps --delay 0    # no delay (use only for 1–2 apps)
 | Monterey | 12.0 | FCP 10.6.8, Compressor 4.6.5, Motion 5.6.5, Logic Pro 10.7.9, MainStage 3.6.4, GarageBand 10.4.8 | Keynote 13.1, Numbers 13.1, Pages 13.1, iMovie 10.3.8 | 14.2 |
 
 > Big Sur (11), Ventura (13), Sonoma (14), and Sequoia (15) data is not yet available.
-> Contributions welcome — see the App External IDs tables in this repository.
+> Contributions welcome — see the App External IDs tables in the companion repository.
 
 ---
 
-## Package rescue and Gatekeeper
+## 🛟 Package rescue and Gatekeeper
 
 Older app versions frequently fail at the **install** step even after a successful download, because Gatekeeper rejects the signature on the app's `.pkg`. When this happens, `mas-legacyapps` automatically:
 
@@ -186,7 +189,7 @@ Older app versions frequently fail at the **install** step even after a successf
 
 After extraction, copy the `.app` to `/Applications`. If macOS still blocks it, run:
 
-```bash
+```shell
 xattr -cr "/Applications/Final Cut Pro.app"
 ```
 
@@ -194,25 +197,25 @@ then right-click the `.app` and choose **Open**.
 
 ---
 
-## Log files
+## 📝 Log files
 
 A log is written to `~/.mas-legacyapps-<timestamp>.log` after each run, recording which apps were installed, skipped (not purchased), or failed.
 
 ---
 
-## How the version IDs work
+## 🔑 How the version IDs work
 
-Each entry in `LegacyAppCatalog.swift` uses an **App External Version ID** (`appExtVrsId`) — an integer that Apple's App Store daemon uses to select a specific historical version of an app. These IDs were collected and catalogued in this repository.
+Each entry in `LegacyAppCatalog.swift` uses an **App External Version ID** (`appExtVrsId`) — an integer that Apple's App Store daemon uses to select a specific historical version of an app. These IDs were collected and catalogued in the companion repository.
 
 The IDs are passed as a query parameter in the App Store purchase request, causing the daemon to download that exact version instead of the current one.
 
-See the [App External IDs tables](../README.md) in the parent repository for the full dataset, including how to find missing IDs.
+→ [App External IDs tables](https://github.com/handyandy87/Pro-Apps-App-External-IDs) — the full dataset, including how to find missing IDs
 
 ---
 
-## Updating the catalog
+## 🔧 Updating the catalog
 
-When new macOS version data is added to this repository's App External ID tables, update `Sources/mas-legacyapps/LegacyAppCatalog.swift` with the new entries:
+When new macOS version data is added to the App External ID tables, update `Sources/mas-legacyapps/LegacyAppCatalog.swift` with the new entries:
 
 ```swift
 MacOSRelease(
@@ -230,14 +233,16 @@ Then rebuild: `swift build --configuration release`.
 
 ---
 
-## Credits
+## 📄 Credits
 
 - **[mas-cli](https://github.com/mas-cli/mas)** — the upstream Mac App Store command-line tool this is built on
 - **[mas-cli-appExtVrsId-patcher](https://github.com/handyandy87/mas-cli-appExtVrsId-patcher)** — the patched fork adding `--ver`, `--lookup`, and package rescue
 - **[Pro-Apps-App-External-IDs](https://github.com/handyandy87/Pro-Apps-App-External-IDs)** — the App External Version ID dataset powering this tool
 
+MIT — see [LICENSE](../../LICENSE).
+
+This tool by [@handyandy87](https://github.com/handyandy87). Original mas by [@argon](https://github.com/argon).
+
 ---
 
-## Disclaimer
-
-This tool interacts with Apple's private `CommerceKit` and `StoreFoundation` frameworks. It only installs apps you have legitimately purchased from the Mac App Store. Use responsibly.
+> This tool interacts with Apple's private `CommerceKit` and `StoreFoundation` frameworks. It only installs apps you have legitimately purchased from the Mac App Store. Use responsibly.
