@@ -55,10 +55,6 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
         self.lookupOnly = lookupOnly
     }
 
-    deinit {
-        // do nothing
-    }
-
     // MARK: - Receipt embedding
 
     /// After a rescue extraction completes, optionally embed the receipt into the extracted app bundle.
@@ -119,6 +115,43 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
         }
     }
 
+    // MARK: - Rescue
+
+    /// Attempts package rescue and extraction for `download`, updating `rescueSucceeded` on success.
+    ///
+    /// Called from both `statusChangedFor` (when the status transitions to failed before removal)
+    /// and `downloadQueue(_:changedWithRemoval:)` (fallback when status is nil at removal time).
+    /// Callers must guard `didAttemptRescue` and set it before calling this method.
+    private func attemptRescueAndReport(download: SSDownload) {
+        guard let rescuer = pkgRescuer else { return }
+        clearLine()
+        do {
+            printInfo("Install failed. Attempting to rescue and extract the downloaded package…")
+            let paths = try rescuer.rescueAndExtract(
+                appName: download.metadata.title,
+                bundleVersion: download.metadata.bundleVersion
+            )
+            rescueSucceeded = true
+            printInfo("Rescue complete. Extracted to: \(paths.extractedDirectory.path)")
+            if let app = paths.extractedApp {
+                printInfo("Extracted app: \(app.path)")
+                printInfo("Copy the extracted app into /Applications to install it.")
+                promptToEmbedReceiptIfRequested(
+                    appURL: app,
+                    extractedDirectory: paths.extractedDirectory,
+                    stagedReceipt: paths.stagedReceipt,
+                    appID: purchase.itemIdentifier
+                )
+                printInfo("Done. Remember to move the extracted app into /Applications.")
+            } else {
+                printInfo("No .app bundle was found in the extracted folder above.")
+                printInfo("Done. If an app bundle exists under the extracted folder, copy it into /Applications.")
+            }
+        } catch {
+            printError("Package rescue failed: \(error.localizedDescription)")
+        }
+    }
+
     func downloadQueue(_ queue: CKDownloadQueue, statusChangedFor download: SSDownload) {
         guard
             download.metadata.itemIdentifier == purchase.itemIdentifier,
@@ -145,37 +178,7 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
         if status.isFailed, !didAttemptRescue {
             didAttemptRescue = true
             pkgRescuer?.stopMonitoring()
-
-            if let rescuer = pkgRescuer {
-                clearLine()
-                do {
-                    printInfo("Install failed. Attempting to rescue and extract the downloaded package…")
-                    let paths = try rescuer.rescueAndExtract(appName: download.metadata.title, bundleVersion: download.metadata.bundleVersion)
-                    rescueSucceeded = true
-                    printInfo("Rescue complete. Extracted to: \(paths.extractedDirectory.path)")
-                    if let app = paths.extractedApp {
-                        printInfo("Extracted app: \(app.path)")
-                        printInfo("Copy the extracted app into /Applications to install it.")
-
-                        // Offer to embed the receipt into the extracted app bundle.
-                        // If the user chooses "Y", copy the receipt (renamed to "receipt") to:
-                        // <App>.app/Contents/_MASReceipt/receipt
-                        self.promptToEmbedReceiptIfRequested(
-                            appURL: app,
-                            extractedDirectory: paths.extractedDirectory,
-                            stagedReceipt: paths.stagedReceipt,
-                            appID: purchase.itemIdentifier
-                        )
-
-                        printInfo("Done. Remember to move the extracted app into /Applications.")
-                    } else {
-                        printInfo("No .app bundle was found in the extracted folder above.")
-                        printInfo("Done. If an app bundle exists under the extracted folder, copy it into /Applications.")
-                    }
-                } catch {
-                    printError("Package rescue failed: \(error.localizedDescription)")
-                }
-            }
+            attemptRescueAndReport(download: download)
         }
 
         if status.isFailed || status.isCancelled {
@@ -251,36 +254,9 @@ class PurchaseDownloadObserver: CKDownloadQueueObserver {
 
             // Any failure after a download attempt: try to rescue and extract the staged `.pkg`.
             // (The App Store cache file can disappear quickly once the system transitions.)
-            if !didAttemptRescue, let rescuer = pkgRescuer {
+            if !didAttemptRescue {
                 didAttemptRescue = true
-                do {
-                    printInfo("Install failed. Attempting to rescue and extract the downloaded package…")
-                    let paths = try rescuer.rescueAndExtract(
-                        appName: download.metadata.title,
-                        bundleVersion: download.metadata.bundleVersion
-                    )
-                    rescueSucceeded = true
-                    printInfo("Rescue complete. Extracted to: \(paths.extractedDirectory.path)")
-                    if let app = paths.extractedApp {
-                        printInfo("Extracted app: \(app.path)")
-                        printInfo("Copy the extracted app into /Applications to install it.")
-
-                        self.promptToEmbedReceiptIfRequested(
-                            appURL: app,
-                            extractedDirectory: paths.extractedDirectory,
-                            stagedReceipt: paths.stagedReceipt,
-                            appID: purchase.itemIdentifier
-                        )
-
-                        printInfo("Done. Remember to move the extracted app into /Applications.")
-                    } else {
-                        printInfo("No .app bundle was found in the extracted folder above.")
-                        printInfo("Done. If an app bundle exists under the extracted folder, copy it into /Applications.")
-                    }
-                } catch {
-                    // If rescue fails, continue with the original mas failure.
-                    printError("Package rescue failed: \(error.localizedDescription)")
-                }
+                attemptRescueAndReport(download: download)
             }
 
             // Suppress the default error output if rescue succeeded.

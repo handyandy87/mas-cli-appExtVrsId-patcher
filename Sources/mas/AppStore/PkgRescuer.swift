@@ -264,12 +264,7 @@ final class PkgRescuer {
                 let nsError = error as NSError
                 if nsError.domain == NSCocoaErrorDomain,
                    nsError.code == CocoaError.fileWriteFileExists.rawValue {
-                    // If it already exists as a directory, proceed; otherwise retry.
-                    var isDir: ObjCBool = false
-                    if fm.fileExists(atPath: candidate.path, isDirectory: &isDir), isDir.boolValue {
-                        // Directory already exists; pick a new unique name.
-                        continue
-                    }
+                    // UUID collision (extremely rare); retry with a new UUID.
                     continue
                 }
                 throw error
@@ -281,7 +276,6 @@ final class PkgRescuer {
             userInfo: [NSLocalizedDescriptionKey: "Unable to create a unique directory under \(parent.path)"]
         )
     }
-
 
     // MARK: - Extract
 

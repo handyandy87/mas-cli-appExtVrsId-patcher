@@ -35,7 +35,7 @@ extension SSPurchase {
         if purchasing {
             parameters["macappinstalledconfirmed"] = 1
             parameters["pricingParameters"] = "STDQ"
-            // Possibly unnecessary…
+            // Ensure the daemon treats this as a fresh purchase rather than a redownload.
             isRedownload = false
         } else {
             parameters["pricingParameters"] = "STDRDL"
